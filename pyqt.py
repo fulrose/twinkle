@@ -1,5 +1,12 @@
 import sys
-from PyQt5.QtCore import QFile, QTextStream, Qt
+
+from imutils.video import FileVideoStream
+from imutils.video import VideoStream
+from imutils import face_utils
+import imutils
+import cv2
+
+from PyQt5.QtCore import (QFile, QTextStream, Qt, QThread, pyqtSignal)
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 
@@ -26,8 +33,8 @@ class TitleBar(QWidget):
 
         label = QLabel(self)
         label.setAlignment(Qt.AlignCenter)
-        label.setText("Window Title")
-        self.setWindowTitle("Window Title")
+        label.setText("Twinkle")
+        self.setWindowTitle("Twinkle")
 
         hbox = QHBoxLayout(self)
         hbox.addWidget(label)
@@ -119,20 +126,34 @@ class Content(QWidget):
 
         # menubar = QMenuBar(self)
         # fileMenu = menubar.addMenu('File')
-        # fileMenu.addAction(exitAct)   
-   
-        self.col = QColor(100, 200, 0)
-        
-        btn1 = QPushButton('Button', self)
-        btn2 = QPushButton('Button', self)
-        btn3 = QPushButton('Button', self)
-        btn4 = QPushButton('Button4', self)
+        # fileMenu.addAction(exitAct)     
 
-        vLayout = QHBoxLayout(self)
-        vLayout.addWidget(btn1)
-        vLayout.addWidget(btn2)
-        vLayout.addWidget(btn3)
-        vLayout.addWidget(btn4)
+        # vLayout = QHBoxLayout(self)
+
+        self.label = QLabel(self)
+        self.label.move(280, 120)
+        self.label.resize(640, 480)
+        th = Thread(self)
+        th.changePixmap.connect(self.setImage)
+        th.start()
+
+    def setImage(self, image):
+        self.label.setPixmap(QPixmap.fromImage(image))
+        
+
+class Thread(QThread):
+    changePixmap = pyqtSignal(QImage)
+
+    def run(self):
+        cap = cv2.VideoCapture(0)
+        while True:
+            ret, frame = cap.read()
+            if ret:
+                rgbImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                convertToQtFormat = QImage(rgbImage.data, rgbImage.shape[1], rgbImage.shape[0], QImage.Format_RGB888)
+                p = convertToQtFormat.scaled(640, 480, Qt.KeepAspectRatio)
+                self.changePixmap.emit(p)
+    
 
 if __name__ == '__main__' :
     app = QApplication(sys.argv)
