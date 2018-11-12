@@ -26,18 +26,22 @@ def eye_aspect_ratio(eye):
 	return ear
  
 # construct the argument parse and parse the arguments
-ap = argparse.ArgumentParser()
-ap.add_argument("-p", "--shape-predictor",default="shape_predictor_68_face_landmarks.dat",
-	help="path to facial landmark predictor")
-ap.add_argument("-v", "--video", type=str, default="camera",
-	help="path to input video file")
-ap.add_argument("-t", "--threshold", type = float, default=0.27,
-	help="threshold to determine closed eyes")
-ap.add_argument("-f", "--frames", type = int, default=2,
-	help="the number of consecutive frames the eye must be below the threshold")
+
+def arg():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-p", "--shape-predictor",default="shape_predictor_68_face_landmarks.dat",
+    	help="path to facial landmark predictor")
+    ap.add_argument("-v", "--video", type=str, default="camera",
+    	help="path to input video file")
+    ap.add_argument("-t", "--threshold", type = float, default=0.27,
+    	help="threshold to determine closed eyes")
+    ap.add_argument("-f", "--frames", type = int, default=2,
+    	help="the number of consecutive frames the eye must be below the threshold")
+    return ap
+
 
 def main() :
-    args = vars(ap.parse_args())
+    args = vars(arg().parse_args())
     EYE_AR_THRESH = args['threshold']
     EYE_AR_CONSEC_FRAMES = args['frames']
 
