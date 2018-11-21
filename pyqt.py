@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 
 import qdarkstyle
+from win10toast import ToastNotifier
 
 def eye_aspect_ratio(eye):
 	# compute the euclidean distances between the two sets of
@@ -46,8 +47,6 @@ def arg():
     	help="the number of consecutive frames the eye must be below the threshold")
     return ap
 
-
-
 class TitleBar(QWidget):
     def __init__(self, parent):
         QWidget.__init__(self, parent)
@@ -58,14 +57,14 @@ class TitleBar(QWidget):
 
         self.minimize=QToolButton(self)
         self.minimize.setIcon(QIcon('img/min.png'))
-        self.maximize=QToolButton(self)
-        self.maximize.setIcon(QIcon('img/max.png'))
+        # self.maximize=QToolButton(self)
+        # self.maximize.setIcon(QIcon('img/max.png'))
         close=QToolButton(self)
         close.setIcon(QIcon('img/close.png'))
 
         self.minimize.setMinimumHeight(10)
         close.setMinimumHeight(10)
-        self.maximize.setMinimumHeight(10)
+        # self.maximize.setMinimumHeight(10)
 
         label = QLabel(self)
         label.setAlignment(Qt.AlignCenter)
@@ -75,7 +74,7 @@ class TitleBar(QWidget):
         hbox = QHBoxLayout(self)
         hbox.addWidget(label)
         hbox.addWidget(self.minimize)
-        hbox.addWidget(self.maximize)
+        # hbox.addWidget(self.maximize)
         hbox.addWidget(close)
 
         # hbox.insertStretch(1,500)
@@ -84,23 +83,24 @@ class TitleBar(QWidget):
         self.maxNormal=False
         close.clicked.connect(self.closeFrame)
         self.minimize.clicked.connect(self.showSmall)
-        self.maximize.clicked.connect(self.showMaxRestore)
+        # self.maximize.clicked.connect(self.showMaxRestore)
 
     def showSmall(self):
         mainFrame.showMinimized()
 
     def closeFrame(self):
         mainFrame.close()
+        # mainFrame.hide()
 
-    def showMaxRestore(self):
-        if(self.maxNormal):
-            mainFrame.showNormal()
-            self.maxNormal = False
-            self.maximize.setIcon(QIcon('img/max.png'))
-        else:
-            mainFrame.showMaximized()
-            self.maxNormal = True
-            self.maximize.setIcon(QIcon('img/max2.png'))            
+    # def showMaxRestore(self):
+    #     if(self.maxNormal):
+    #         mainFrame.showNormal()
+    #         self.maxNormal = False
+    #         self.maximize.setIcon(QIcon('img/max.png'))
+    #     else:
+    #         mainFrame.showMaximized()
+    #         self.maxNormal = True
+    #         self.maximize.setIcon(QIcon('img/max2.png'))            
 
     def mousePressEvent(self,event):
         if event.button() == Qt.LeftButton:
@@ -291,11 +291,15 @@ class Thread(QThread):
             self.changePixmap.emit(p)
 
 if __name__ == '__main__' :
+
+    toaster = ToastNotifier()
+    toaster.show_toast("Hello", "welcome", threaded=True)
+
     app = QApplication(sys.argv)
     app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
-    mainFrame = Frame()
+    mainFrame = Frame()   
 
     mainFrame.setGeometry(100, 100, 1500, 800)
-    mainFrame.show()
+    mainFrame.show()    
 
     sys.exit(app.exec_())
