@@ -123,11 +123,15 @@ class Frame(QFrame):
         self.setMouseTracking(True)
 
         self.m_titleBar= TitleBar(self)
-        self.m_content= Content(self)
+        self.m_button = QPushButton(self)
+        self.m_button.clicked.connect(self.buildPopup)
+        # self.m_content= Content(self)
+        # self.m_dialog = CameraDialog(self)
 
         vbox = QVBoxLayout(self)
         vbox.addWidget(self.m_titleBar)
-        vbox.addWidget(self.m_content)
+        vbox.addWidget(self.m_button)
+        # vbox.addWidget(self.m_content)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
@@ -136,7 +140,23 @@ class Frame(QFrame):
 
         # layout.setContentsMargins(5, 5, 5, 5)
         # layout.setSpacing(0)
-        # vbox.addLayout(layout)        
+        # vbox.addLayout(layout)
+
+    def buildPopup(self):
+        # popup = CameraDialog(self)
+        # popup.setGeometry(100, 100, 640, 480)
+        # popup.show()
+        self.cameraLabel = QLabel(self)
+        th.changePixmap.connect(self.setImage) 
+        self.cameraLabel.setGeometry(200, 200, 640, 480)       
+
+        popup = QDialog(self)
+        vbox = QVBoxLayout(popup)
+        vbox.addWidget(self.cameraLabel)
+        popup.show()
+
+    def setImage(self, image):
+        self.cameraLabel.setPixmap(QPixmap.fromImage(image))
 
     def mousePressEvent(self,event):
         self.m_old_pos = event.pos()
@@ -148,6 +168,15 @@ class Frame(QFrame):
 
     def mouseReleaseEvent(self,event):
         m_mouse_down=False
+
+class CameraPopup(QDialog):
+    def __init__(self, parent):
+        super().__init__()
+        self.initUI()
+    
+    def initUI(self):
+        abc = 1
+
 
 class Content(QWidget):
     def __init__(self, parent):
@@ -169,15 +198,14 @@ class Content(QWidget):
         self.label = QLabel(self)
         self.label.move(280, 120)
         self.label.resize(640, 480)
-        th = Thread(self)
+        th = CameraThread(self)
         th.changePixmap.connect(self.setImage)
         th.start()
 
     def setImage(self, image):
         self.label.setPixmap(QPixmap.fromImage(image))
-        
 
-class Thread(QThread):
+class CameraThread(QThread):
     changePixmap = pyqtSignal(QImage)
 
     def run(self):
@@ -297,7 +325,9 @@ if __name__ == '__main__' :
 
     app = QApplication(sys.argv)
     app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
-    mainFrame = Frame()   
+    mainFrame = Frame()
+    th = CameraThread()
+    th.start()
 
     mainFrame.setGeometry(100, 100, 1500, 800)
     mainFrame.show()    
