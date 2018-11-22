@@ -143,12 +143,9 @@ class Frame(QFrame):
         # vbox.addLayout(layout)
 
     def buildPopup(self):
-        # popup = CameraDialog(self)
-        # popup.setGeometry(100, 100, 640, 480)
-        # popup.show()
         self.cameraLabel = QLabel(self)
         th.changePixmap.connect(self.setImage) 
-        self.cameraLabel.setGeometry(200, 200, 640, 480)       
+        self.cameraLabel.setGeometry(200, 200, camera_width, camera_height)       
 
         popup = QDialog(self)
         vbox = QVBoxLayout(popup)
@@ -168,15 +165,6 @@ class Frame(QFrame):
 
     def mouseReleaseEvent(self,event):
         m_mouse_down=False
-
-class CameraPopup(QDialog):
-    def __init__(self, parent):
-        super().__init__()
-        self.initUI()
-    
-    def initUI(self):
-        abc = 1
-
 
 class Content(QWidget):
     def __init__(self, parent):
@@ -259,7 +247,7 @@ class CameraThread(QThread):
             # it, and convert it to grayscale
             # channels)
             frame = vs.read()
-            frame = imutils.resize(frame, width=640)
+            frame = imutils.resize(frame, width=camera_width)
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
             # detect faces in the grayscale frame
@@ -310,15 +298,18 @@ class CameraThread(QThread):
                 # the computed eye aspect ratio for the frame
                 cv2.putText(frame, "Blinks: {}".format(TOTAL), (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                cv2.putText(frame, "EAR: {:.2f}".format(ear), (300, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                # cv2.putText(frame, "EAR: {:.2f}".format(ear), (200, 30),
+                #     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
             rgbImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             convertToQtFormat = QImage(rgbImage.data, rgbImage.shape[1], rgbImage.shape[0], QImage.Format_RGB888)
-            p = convertToQtFormat.scaled(640, 480, Qt.KeepAspectRatio)
+            p = convertToQtFormat.scaled(camera_width, camera_height, Qt.KeepAspectRatio)
             self.changePixmap.emit(p)
 
 if __name__ == '__main__' :
+
+    camera_width = 320
+    camera_height = 640
 
     toaster = ToastNotifier()
     toaster.show_toast("Hello", "welcome", threaded=True)
