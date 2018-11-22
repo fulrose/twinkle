@@ -35,35 +35,45 @@ def arg():
                     help="path to facial landmark predictor")
     ap.add_argument("-v", "--video", type=str, default="camera",
                     help="path to input video file")
-    ap.add_argument("-t", "--threshold", type=float, default=0.16,
+    ap.add_argument("-t", "--threshold", type=float, default=0.14,
                     help="threshold to determine closed eyes")
-    ap.add_argument("-f", "--frames", type=int, default=2,
+    ap.add_argument("-f", "--frames", type=int, default=1,
                     help="the number of consecutive frames the eye must be below the threshold")
     return ap
 
 
-def alertBlink():
+def alert_blink():
     print("Please Blink!!")
     # TODO
 
 
-def alertWorkTime():
+def alert_work_time():
     print("Please take a break!!")
     # TODO
+
+
+def notice_empty_seat():
+    print("Can't detect face!")
+    # TODO
+
 
 def main():
     args = vars(arg().parse_args())
     EYE_AR_THRESH = args['threshold']
     EYE_AR_CONSEC_FRAMES = args['frames']
-    BLINK_ALERT_THRESH = 6
-    WORK_ALERT_THRESH = 60  # sec
-    BLINK_GAP_THRESH = 3.0  # sec
-    dont_blink_count = 0
+
+    BLINK_ALERT_THRESH = 6  # if LATE_BLINK_CNT is over than this value, system will alert to user.
+    WORK_ALERT_THRESH = 60  # if WORKING_TIME is over than this value, system will alert to user.
+    BLINK_GAP_THRESH = 3.0  # if blink-to-blink gap is over than this value, LATE_BLINK_CNT++.
+    EMPTY_NOTICE_THRESH = 5 # if user's empty time is over than this value, system will notice.
+    LATE_BLINK_CNT = 0
 
     # initialize the frame counters and the total number of blinks
-    workingTime = 0
-    startFlag = False
-    faceDetectFlag = False
+    WORKING_TIME = 0.0
+    START_FLAG = False
+    FACE_DETECT_FLAG = False
+    EMPTY_SEAT_FLAG = False
+    EMPTY_FLAG = False
 
     COUNTER = 0
     TOTAL = 0
@@ -93,11 +103,28 @@ def main():
 
     # loop over frames from the video stream
     while True:
-        if (not startFlag) and faceDetectFlag:
-            before = time.time()
-            startFlag = True
-        if startFlag and (not faceDetectFlag):
-            before = time.time()
+        if not START_FLAG:
+            BEFORE_TIME = time.time()
+        if (not START_FLAG) and FACE_DETECT_FLAG:
+            BEFORE_TIME = time.time()
+            START_FLAG = True
+        if START_FLAG and (not FACE_DETECT_FLAG):
+            # BEFORE_TIME = time.time()
+            if not EMPTY_SEAT_FLAG:
+                EMPTY_SEAT_FLAG = True
+                #print("aaaaa")
+                EMPTY_BEFORE_TIME = time.time()
+
+        if FACE_DETECT_FLAG and EMPTY_SEAT_FLAG:
+            BEFORE_TIME = time.time()
+            EMPTY_SEAT_FLAG = False
+            EMPTY_FLAG = False
+
+        if (not EMPTY_FLAG) and EMPTY_SEAT_FLAG and time.time() - EMPTY_BEFORE_TIME >= EMPTY_NOTICE_THRESH:
+            notice_empty_seat()
+            WORKING_TIME = 0.0
+            EMPTY_FLAG = True
+
         # if this is a file video stream, then we need to check if
         # there any more frames left in the buffer to process
         if fileStream and not vs.more():
@@ -107,15 +134,15 @@ def main():
         # it, and convert it to grayscale
         # channels)
         frame = vs.read()
-        frame = imutils.resize(frame, width=450)
+        frame = imutils.resize(frame, width=640)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # detect faces in the grayscale frame
         rects = detector(gray, 0)
-        faceDetectFlag = False
+        FACE_DETECT_FLAG = False
         # loop over the face detections
         for rect in rects:
-            faceDetectFlag = True
+            FACE_DETECT_FLAG = True
             # print("test.....")
             # determine the facial landmarks for the face region, then
             # convert the facial landmark (x, y)-coordinates to a NumPy
@@ -143,7 +170,7 @@ def main():
             # check to see if the eye aspect ratio is below the blink
             # threshold, and if so, increment the blink frame counter
             if ear < EYE_AR_THRESH:
-                blinkEAR = ear
+                BLINK_EAR = ear
                 COUNTER += 1
 
             # otherwise, the eye aspect ratio is not below the blink
@@ -152,16 +179,16 @@ def main():
                 # if the eyes were closed for a sufficient number of
                 # then increment the total number of blinks
                 if COUNTER >= EYE_AR_CONSEC_FRAMES:
-                    now = time.time()
-                    workingTime += (now - before)
-                    if (now - before) >= BLINK_GAP_THRESH:
-                        dont_blink_count += 1
+                    NOW_TIME = time.time()
+                    WORKING_TIME += (NOW_TIME - BEFORE_TIME)
+                    if (NOW_TIME - BEFORE_TIME) >= BLINK_GAP_THRESH:
+                        LATE_BLINK_CNT += 1
                     else:
-                        if dont_blink_count > 0:
-                            dont_blink_count -= 1
-                    print("Blink Gap: ", now - before, " / totalWorkTime: ", workingTime, " / EAR: ", blinkEAR,
-                          " / dontBlinkCount: ", dont_blink_count)
-                    before = now
+                        if LATE_BLINK_CNT > 0:
+                            LATE_BLINK_CNT -= 1
+                    print("Blink Gap: ", NOW_TIME - BEFORE_TIME, " / totalWorkTime: ", WORKING_TIME, " / EAR: ", BLINK_EAR,
+                          " / lateBlinkCount: ", LATE_BLINK_CNT)
+                    BEFORE_TIME = NOW_TIME
                     TOTAL += 1
 
                 # reset the eye frame counter
@@ -171,18 +198,18 @@ def main():
             # the computed eye aspect ratio for the frame
             cv2.putText(frame, "Blinks: {}".format(TOTAL), (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            cv2.putText(frame, "EAR: {:.2f}".format(ear), (300, 30),
+            cv2.putText(frame, "EAR: {:.2f}".format(ear), (500, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
             # Blink Alert
-            if dont_blink_count >= BLINK_ALERT_THRESH:
-                alertBlink()
-                dont_blink_count = 0
+            if LATE_BLINK_CNT >= BLINK_ALERT_THRESH:
+                alert_blink()
+                LATE_BLINK_CNT = 0
 
             # Working Time Alert
-            if workingTime >= WORK_ALERT_THRESH:
-                alertWorkTime()
-                workingTime = 0
+            if WORKING_TIME >= WORK_ALERT_THRESH:
+                alert_work_time()
+                WORKING_TIME = 0
 
         # show the frame
         cv2.imshow("Frame", frame)
