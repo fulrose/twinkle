@@ -34,19 +34,11 @@ def eye_aspect_ratio(eye):
 	return ear
 
 def load_config():
-    try:
-        f = open('threshold_config.txt', 'r')
-    except FileNotFoundError as e:
-        f = open("threshold_config.txt", "w")     # if config file does not exist, create new config file.
-        t = 0.2                         # and default threshold is 0.2
-        f.write(str(t))
-        f.close()
-        f = open("threshold_config.txt", "r")
-
+    
+    f = open('threshold_config.txt', 'r')
     t = float(f.readline())
     f.close()
     return t
-
 
 # file write
 def save_config(t):
