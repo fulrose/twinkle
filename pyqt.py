@@ -10,7 +10,7 @@ import argparse
 import dlib
 import cv2
 
-from PyQt5.QtCore import (QFile, QTextStream, Qt, QThread, pyqtSignal)
+from PyQt5.QtCore import (QFile, QTextStream, Qt, QThread, pyqtSignal, QCoreApplication)
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 
@@ -32,19 +32,47 @@ def eye_aspect_ratio(eye):
 
 	# return the eye aspect ratio
 	return ear
+
+def load_config():
+    try:
+        f = open('threshold_config.txt', 'r')
+    except FileNotFoundError as e:
+        f = open("threshold_config.txt", "w")     # if config file does not exist, create new config file.
+        t = 0.2                         # and default threshold is 0.2
+        f.write(str(t))
+        f.close()
+        f = open("threshold_config.txt", "r")
+
+    t = float(f.readline())
+    f.close()
+    return t
+
+
+# file write
+def save_config(t):
+    f = open("threshold_config.txt", "w")
+
+    f.write(str(t))
+    f.close()
  
 # construct the argument parse and parse the arguments
-
 def arg():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-p", "--shape-predictor",default="shape_predictor_68_face_landmarks.dat",
-    	help="path to facial landmark predictor")
-    ap.add_argument("-v", "--video", type=str, default="camera",
-    	help="path to input video file")
-    ap.add_argument("-t", "--threshold", type = float, default=0.27,
-    	help="threshold to determine closed eyes")
-    ap.add_argument("-f", "--frames", type = int, default=2,
-    	help="the number of consecutive frames the eye must be below the threshold")
+
+    # ap = argparse.ArgumentParser()
+    # ap.add_argument("-p", "--shape-predictor",default="shape_predictor_68_face_landmarks.dat",
+    # 	help="path to facial landmark predictor")
+    # ap.add_argument("-v", "--video", type=str, default="camera",
+    # 	help="path to input video file")
+    # ap.add_argument("-t", "--threshold", type = float, default=0.20,
+    # 	help="threshold to determine closed eyes")
+    # ap.add_argument("-f", "--frames", type = int, default=2,
+    # 	help="the number of consecutive frames the eye must be below the threshold")
+    ap = {}
+    ap['shape_predictor'] = "shape_predictor_68_face_landmarks.dat"
+    ap['video'] = "camera"
+    ap['threshold'] = load_config()
+    ap['frames'] = 2
+
     return ap
 
 class TitleBar(QWidget):
@@ -57,14 +85,13 @@ class TitleBar(QWidget):
 
         self.minimize=QToolButton(self)
         self.minimize.setIcon(QIcon('img/min.png'))
-        # self.maximize=QToolButton(self)
-        # self.maximize.setIcon(QIcon('img/max.png'))
+        self.minimize.setStyleSheet("background-color: rbga(0,0,0,0); ")
         close=QToolButton(self)
         close.setIcon(QIcon('img/close.png'))
+        close.setStyleSheet("background-color: rbga(0,0,0,0);")
 
         self.minimize.setMinimumHeight(10)
         close.setMinimumHeight(10)
-        # self.maximize.setMinimumHeight(10)
 
         label = QLabel(self)
         label.setAlignment(Qt.AlignCenter)
@@ -74,7 +101,6 @@ class TitleBar(QWidget):
         hbox = QHBoxLayout(self)
         hbox.addWidget(label)
         hbox.addWidget(self.minimize)
-        # hbox.addWidget(self.maximize)
         hbox.addWidget(close)
 
         # hbox.insertStretch(1,500)
@@ -83,24 +109,15 @@ class TitleBar(QWidget):
         self.maxNormal=False
         close.clicked.connect(self.closeFrame)
         self.minimize.clicked.connect(self.showSmall)
-        # self.maximize.clicked.connect(self.showMaxRestore)
 
     def showSmall(self):
         mainFrame.showMinimized()
 
     def closeFrame(self):
-        mainFrame.close()
-        # mainFrame.hide()
-
-    # def showMaxRestore(self):
-    #     if(self.maxNormal):
-    #         mainFrame.showNormal()
-    #         self.maxNormal = False
-    #         self.maximize.setIcon(QIcon('img/max.png'))
-    #     else:
-    #         mainFrame.showMaximized()
-    #         self.maxNormal = True
-    #         self.maximize.setIcon(QIcon('img/max2.png'))            
+        # mainFrame.close()
+        toaster = ToastNotifier()
+        toaster.show_toast("Still Running", "Program was minimized to Tray..", icon_path='img/eye-tracking.ico', threaded=True)
+        mainFrame.hide()          
 
     def mousePressEvent(self,event):
         if event.button() == Qt.LeftButton:
@@ -121,36 +138,156 @@ class Frame(QFrame):
         self.setFrameShape(QFrame.StyledPanel)
         self.setWindowFlag(Qt.FramelessWindowHint)
         self.setMouseTracking(True)
+        self.m_titleBar= TitleBar(self)        
 
-        self.m_titleBar= TitleBar(self)
-        self.m_button = QPushButton(self)
-        self.m_button.clicked.connect(self.buildPopup)
-        # self.m_content= Content(self)
-        # self.m_dialog = CameraDialog(self)
+        # Setting Layout
+        hbox = QHBoxLayout()
+        self.camera_btn = QPushButton("Check Camera")
+        self.camera_btn.setFixedSize(110,30)
+        self.camera_btn.clicked.connect(self.buildPopup)
+        hbox.addWidget(self.camera_btn, alignment=Qt.AlignRight)
+        hbox.setContentsMargins(0,0,14,0)
+
+        # left Label
+        left_label = QLabel()
+        left_label.setFixedSize(250, 200)
+        left_label.setStyleSheet("background-color: #404040; padding: 5px;")
+
+        left_label_vbox = QVBoxLayout(left_label)
+        left_label_title = QLabel("Twinkle")
+        left_label_title.setStyleSheet("font-size: 25px; font-weight: bold;")
+        left_label_unit = QLabel("Avg.")
+        left_label_unit.setStyleSheet("font-size: 20px; ")
+        self.left_label_content = QLabel("-")        
+        self.left_label_content.setStyleSheet("font-size: 75px; font-weight: bold;")
+
+        left_label_vbox.addWidget(left_label_title, alignment=Qt.AlignTop | Qt.AlignCenter)
+        left_label_vbox.addWidget(left_label_unit, alignment=Qt.AlignTop | Qt.AlignCenter)
+        left_label_vbox.addWidget(self.left_label_content, alignment=Qt.AlignRight)
+        th.changeAvgBlink.connect(self.left_setText)
+    
+        # Right Label
+        right_label = QLabel()
+        right_label.setFixedSize(250,200)
+        right_label.setStyleSheet("background-color: #404040; padding: 5px;")
+
+        right_label_vbox = QVBoxLayout(right_label)
+        right_label_title = QLabel("Working Time")
+        right_label_title.setStyleSheet("font-size: 25px; font-weight: bold;")
+        right_label_unit = QLabel("(minute)")
+        right_label_unit.setStyleSheet("font-size: 20px;")
+        self.right_label_content = QLabel("0")
+        self.right_label_content.setStyleSheet("font-size: 75px; font-weight: bold;")
+
+        right_label_vbox.addWidget(right_label_title, alignment=Qt.AlignTop | Qt.AlignCenter)
+        right_label_vbox.addWidget(right_label_unit, alignment=Qt.AlignTop | Qt.AlignCenter)
+        right_label_vbox.addWidget(self.right_label_content, alignment=Qt.AlignRight)
+        th.changeWorkTime.connect(self.right_setText)
+
+        # Top label Style
+        main_top = QWidget()
+        # main_top.setStyleSheet("background-color: gray;")                
+        main_hbox = QHBoxLayout(main_top)
+        main_hbox.addWidget(left_label, alignment=Qt.AlignCenter)
+        main_hbox.addWidget(right_label, alignment=Qt.AlignCenter)
+                
+        textLabel = QLabel("")
+        textLabel.setStyleSheet("background-color: #404040;")
+        textLabel.setFixedSize(475,75)
 
         vbox = QVBoxLayout(self)
         vbox.addWidget(self.m_titleBar)
-        vbox.addWidget(self.m_button)
-        # vbox.addWidget(self.m_content)
-        vbox.setContentsMargins(0, 0, 0, 0)
-        vbox.setSpacing(0)
-
-        # layout = QVBoxLayout()
-        # layout.addWidget(self.m_content)
-
-        # layout.setContentsMargins(5, 5, 5, 5)
-        # layout.setSpacing(0)
-        # vbox.addLayout(layout)
+        vbox.addLayout(hbox)
+        vbox.addWidget(main_top)
+        vbox.addWidget(textLabel, alignment=Qt.AlignCenter)
+        
+        # vbox.addLayout(hbox)
+        # vbox.addLayout(vbox_2)
+        vbox.setContentsMargins(0, 0, 0, 0)       
 
     def buildPopup(self):
         self.cameraLabel = QLabel(self)
         th.changePixmap.connect(self.setImage) 
-        self.cameraLabel.setGeometry(200, 200, camera_width, camera_height)       
+        self.cameraLabel.setGeometry(0, 0, camera_height, camera_height)
 
-        popup = QDialog(self)
-        vbox = QVBoxLayout(popup)
+        self.tmpThreshold = args['threshold']
+
+        self.popup = CameraPopup(self)
+        self.popup.move(800, 100)
+
+        text_sensitive = QLabel("Sensitive")
+        text_sensitive.setStyleSheet("font-size: 20px; font-weight: bold;")
+
+        scaleLayout = QHBoxLayout()
+        decBtn = QPushButton()
+        decBtn.setIcon(QIcon('img/white_minus.ico'))
+        decBtn.clicked.connect(self.decThreshold)
+        incBtn = QPushButton()
+        incBtn.setIcon(QIcon('img/white_plus.ico'))
+        incBtn.clicked.connect(self.incThreshold)
+        self.thresholdText = QLabel("-")
+        self.thresholdText.setStyleSheet("font-size: 30px;")
+        self.thresholdText.setText(str(self.tmpThreshold))
+        scaleLayout.addWidget(decBtn)
+        scaleLayout.addSpacing(30)
+        scaleLayout.addWidget(self.thresholdText)
+        scaleLayout.addSpacing(30)
+        scaleLayout.addWidget(incBtn)
+        scaleLayout.setAlignment(Qt.AlignCenter)        
+
+        btnLayout = QHBoxLayout()
+        saveBtn = QPushButton("Save Change")
+        saveBtn.setFixedSize(100, 30)
+        saveBtn.clicked.connect(self.saveThreshold)
+        nonSaveCloseBtn = QPushButton("Close")
+        nonSaveCloseBtn.setFixedSize(100, 30)
+        nonSaveCloseBtn.clicked.connect(self.closePopup)
+        btnLayout.addWidget(saveBtn)
+        btnLayout.addSpacing(30)
+        btnLayout.addWidget(nonSaveCloseBtn)
+        btnLayout.setAlignment(Qt.AlignCenter)
+            
+        vbox = QVBoxLayout(self.popup)
         vbox.addWidget(self.cameraLabel)
-        popup.show()
+        vbox.addSpacing(5)
+        vbox.addWidget(text_sensitive, alignment=Qt.AlignCenter)
+        vbox.addSpacing(5)
+        vbox.addLayout(scaleLayout)
+        vbox.addLayout(btnLayout)
+        self.popup.show()
+
+    def decThreshold(self):
+        self.tmpThreshold -= 0.01
+        self.tmpThreshold = round(self.tmpThreshold, 2)
+        global EYE_AR_THRESH
+        EYE_AR_THRESH = self.tmpThreshold
+        self.thresholdText.setText(str(self.tmpThreshold))
+
+    def incThreshold(self):
+        self.tmpThreshold += 0.01
+        self.tmpThreshold = round(self.tmpThreshold, 2)
+        global EYE_AR_THRESH
+        EYE_AR_THRESH = self.tmpThreshold
+        self.thresholdText.setText(str(self.tmpThreshold))
+
+    def saveThreshold(self):
+        save_config(self.tmpThreshold)
+        args['threshold'] = self.tmpThreshold
+        toaster = ToastNotifier()
+        toaster.show_toast("Save", "Save changed", icon_path='img/eye-tracking.ico', threaded=True)
+        self.popup.hide()
+
+    def closePopup(self):
+        self.tmpThreshold = args['threshold']
+        self.popup.hide()
+
+    def left_setText(self, float_text):
+        float_text = round(float_text, 1)
+        self.left_label_content.setText(str(float_text))
+
+    def right_setText(self, float_text):
+        floatToInt = int(float_text/60)
+        self.right_label_content.setText(str(floatToInt))
 
     def setImage(self, image):
         self.cameraLabel.setPixmap(QPixmap.fromImage(image))
@@ -166,35 +303,46 @@ class Frame(QFrame):
     def mouseReleaseEvent(self,event):
         m_mouse_down=False
 
-class Content(QWidget):
-    def __init__(self, parent):
-        super().__init__()
-        self.initUI()
-    
-    def initUI(self):
-        # exitAct = QAction(QIcon('exit.png'), 'Exit', self)        
-        # exitAct.setShortcut('Ctrl+Q')
-        # exitAct.setStatusTip('Exit application')
-        # exitAct.triggered.connect(qApp.quit)
 
-        # menubar = QMenuBar(self)
-        # fileMenu = menubar.addMenu('File')
-        # fileMenu.addAction(exitAct)     
+class CameraPopup(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
 
-        # vLayout = QHBoxLayout(self)
+    def closeEvent(self, evnt):
+        evnt.ignore()
+        self.hide()
 
-        self.label = QLabel(self)
-        self.label.move(280, 120)
-        self.label.resize(640, 480)
-        th = CameraThread(self)
-        th.changePixmap.connect(self.setImage)
-        th.start()
-
-    def setImage(self, image):
-        self.label.setPixmap(QPixmap.fromImage(image))
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.hide()
 
 class CameraThread(QThread):
     changePixmap = pyqtSignal(QImage)
+    changeAvgBlink = pyqtSignal(float)
+    changeWorkTime = pyqtSignal(float)
+
+    def alert_blink(self):
+        print("Please Blink!!")
+        toaster = ToastNotifier()
+        toaster.show_toast("Blink!!!",
+                        "Please blink your eyes!",
+                        icon_path='img/eye_warning.ico' ,
+                        duration=10, threaded=True)
+        # TODO
+
+    def alert_work_time(self):
+        print("Please take a break!!")
+        toaster = ToastNotifier()
+        toaster.show_toast("Break!!!",
+                        "Please take a break!",
+                        icon_path='img/sit_warning.ico' ,
+                        duration=10, threaded=True)
+        # TODO
+
+
+    def notice_empty_seat(self):
+        print("Can't detect face!")
+        # TODO
 
     def run(self):
         # cap = cv2.VideoCapture(0)
@@ -206,11 +354,22 @@ class CameraThread(QThread):
         #         p = convertToQtFormat.scaled(640, 480, Qt.KeepAspectRatio)
         #         self.changePixmap.emit(p)
 
-        args = vars(arg().parse_args())
-        EYE_AR_THRESH = args['threshold']
         EYE_AR_CONSEC_FRAMES = args['frames']
 
+        BLINK_ALERT_THRESH = 3  # if LATE_BLINK_CNT is over than this value, system will alert to user.
+        WORK_ALERT_THRESH = 120  # if WORKING_TIME is over than this value, system will alert to user.
+        BLINK_GAP_THRESH = 3.0  # if blink-to-blink gap is over than this value, LATE_BLINK_CNT++.
+        EMPTY_NOTICE_THRESH = 5 # if user's empty time is over than this value, system will notice.
+        LATE_BLINK_CNT = 0
+        AVG_BLINK_CNT = 0.0
+
         # initialize the frame counters and the total number of blinks
+        WORKING_TIME = 0
+        START_FLAG = False
+        FACE_DETECT_FLAG = False
+        EMPTY_SEAT_FLAG = False
+        EMPTY_FLAG = False
+
         COUNTER = 0
         TOTAL = 0
 
@@ -237,90 +396,180 @@ class CameraThread(QThread):
     
         time.sleep(1.0)
         # loop over frames from the video stream
+            # loop over frames from the video stream
         while True:
+            if not START_FLAG:
+                BEFORE_TIME = time.time()
+            if (not START_FLAG) and FACE_DETECT_FLAG:
+                BEFORE_TIME = time.time()
+                START_FLAG = True
+            if START_FLAG and (not FACE_DETECT_FLAG):
+                # BEFORE_TIME = time.time()
+                if not EMPTY_SEAT_FLAG:
+                    EMPTY_SEAT_FLAG = True
+                    #print("aaaaa")
+                    EMPTY_BEFORE_TIME = time.time()
+
+            if FACE_DETECT_FLAG and EMPTY_SEAT_FLAG:
+                BEFORE_TIME = time.time()
+                EMPTY_SEAT_FLAG = False
+                EMPTY_FLAG = False
+
+            if (not EMPTY_FLAG) and EMPTY_SEAT_FLAG and time.time() - EMPTY_BEFORE_TIME >= EMPTY_NOTICE_THRESH:
+                self.notice_empty_seat()
+                # WORKING_TIME = 0.0
+                EMPTY_FLAG = True
+
             # if this is a file video stream, then we need to check if
             # there any more frames left in the buffer to process
             if fileStream and not vs.more():
                 break
-        
+
             # grab the frame from the threaded video file stream, resize
             # it, and convert it to grayscale
             # channels)
             frame = vs.read()
-            frame = imutils.resize(frame, width=camera_width)
+            frame = imutils.resize(frame, width=640)
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        
+
             # detect faces in the grayscale frame
             rects = detector(gray, 0)
-        
+            FACE_DETECT_FLAG = False
             # loop over the face detections
             for rect in rects:
+                FACE_DETECT_FLAG = True
+                # print("test.....")
                 # determine the facial landmarks for the face region, then
                 # convert the facial landmark (x, y)-coordinates to a NumPy
                 # array
                 shape = predictor(gray, rect)
                 shape = face_utils.shape_to_np(shape)
-        
+
+                # draw face landmakrs
+                # for (x, y) in shape:
+                #     cv2.circle(frame, (x, y), 2, (0, 0, 255), -1)
+
                 # extract the left and right eye coordinates, then use the
                 # coordinates to compute the eye aspect ratio for both eyes
                 leftEye = shape[lStart:lEnd]
                 rightEye = shape[rStart:rEnd]
                 leftEAR = eye_aspect_ratio(leftEye)
                 rightEAR = eye_aspect_ratio(rightEye)
-        
+
                 # average the eye aspect ratio together for both eyes
                 ear = (leftEAR + rightEAR) / 2.0
-        
+
                 # compute the convex hull for the left and right eye, then
                 # visualize each of the eyes
                 leftEyeHull = cv2.convexHull(leftEye)
                 rightEyeHull = cv2.convexHull(rightEye)
                 cv2.drawContours(frame, [leftEyeHull], -1, (0, 255, 0), 1)
                 cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
-        
+
                 # check to see if the eye aspect ratio is below the blink
                 # threshold, and if so, increment the blink frame counter
                 if ear < EYE_AR_THRESH:
+                    BLINK_EAR = ear
                     COUNTER += 1
-        
+
                 # otherwise, the eye aspect ratio is not below the blink
                 # threshold
                 else:
                     # if the eyes were closed for a sufficient number of
                     # then increment the total number of blinks
-                    if COUNTER >= EYE_AR_CONSEC_FRAMES:
+                    NOW_TIME = time.time()
+                    if COUNTER >= EYE_AR_CONSEC_FRAMES and (NOW_TIME - BEFORE_TIME) > 1.0:
+                        WORKING_TIME += (NOW_TIME - BEFORE_TIME)
+                        if (NOW_TIME - BEFORE_TIME) >= BLINK_GAP_THRESH:
+                            LATE_BLINK_CNT += 1
+                        else:
+                            if LATE_BLINK_CNT > 0:
+                                LATE_BLINK_CNT -= 1
+
                         TOTAL += 1
-        
+                        if WORKING_TIME >= 60:
+                            AVG_BLINK_CNT = TOTAL * 60 / WORKING_TIME
+                        print("Blink Gap: ", NOW_TIME - BEFORE_TIME, " / totalWorkTime: ", WORKING_TIME, " / EAR: ", BLINK_EAR,
+                            " / lateBlinkCount: ", LATE_BLINK_CNT, " / Blink per Minute: ", AVG_BLINK_CNT)
+                        BEFORE_TIME = NOW_TIME
+                        
+
                     # reset the eye frame counter
                     COUNTER = 0
-        
+
                 # draw the total number of blinks on the frame along with
                 # the computed eye aspect ratio for the frame
                 cv2.putText(frame, "Blinks: {}".format(TOTAL), (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                # cv2.putText(frame, "EAR: {:.2f}".format(ear), (200, 30),
-                #     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                # cv2.putText(frame, "EAR: {:.2f}".format(ear), (500, 30),
+                #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)        
+
+                # Blink Alert
+                if LATE_BLINK_CNT >= BLINK_ALERT_THRESH:
+                    self.alert_blink()
+                    LATE_BLINK_CNT = 0
+
+                # Working Time Alert
+                if WORKING_TIME >= WORK_ALERT_THRESH:
+                    self.alert_work_time()
+                    WORKING_TIME = 0
+                    TOTAL = 0
+
+                self.changeAvgBlink.emit(AVG_BLINK_CNT)
+                self.changeWorkTime.emit(WORKING_TIME)
 
             rgbImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             convertToQtFormat = QImage(rgbImage.data, rgbImage.shape[1], rgbImage.shape[0], QImage.Format_RGB888)
             p = convertToQtFormat.scaled(camera_width, camera_height, Qt.KeepAspectRatio)
             self.changePixmap.emit(p)
 
+class SysetmTrayIcon(QSystemTrayIcon):
+    def __init__(self, QIcon, parent=None):
+        QSystemTrayIcon.__init__(self, QIcon, parent)
+
+        trayMenu = QMenu()
+        openAct = QAction("Open", self)
+        openAct.triggered.connect(self.open)
+
+        exitAct = QAction("Exit", self)
+        exitAct.triggered.connect(self.exit)
+
+        trayMenu.addAction(openAct)        
+        trayMenu.addAction(exitAct)
+        
+        self.setContextMenu(trayMenu)
+
+    def open(self):
+        mainFrame.show()
+
+    def exit(self):
+        mainFrame.close()
+
+
 if __name__ == '__main__' :
 
-    camera_width = 320
-    camera_height = 640
+    camera_width = 640
+    camera_height = 480
+    args = arg()
+    EYE_AR_THRESH = args['threshold']
 
     toaster = ToastNotifier()
-    toaster.show_toast("Hello", "welcome", threaded=True)
-
-    app = QApplication(sys.argv)
-    app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
-    mainFrame = Frame()
+    toaster.show_toast("Twinkle", "Running...", icon_path='img/eye-tracking.ico' , threaded=True)
     th = CameraThread()
     th.start()
+    time.sleep(4.0)
 
-    mainFrame.setGeometry(100, 100, 1500, 800)
-    mainFrame.show()    
+    app = QApplication(sys.argv)
+    app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())    
+    mainFrame = Frame()
+
+    # check Camera!
+    mainFrame.buildPopup()
+
+    trayIcon = SysetmTrayIcon(QIcon('img/program_icon.png'))
+    trayIcon.show()
+
+    mainFrame.setGeometry(100, 100, 550, 450)
+    # mainFrame.show()    
 
     sys.exit(app.exec_())
