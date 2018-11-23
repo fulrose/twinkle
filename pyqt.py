@@ -10,7 +10,7 @@ import argparse
 import dlib
 import cv2
 
-from PyQt5.QtCore import (QFile, QTextStream, Qt, QThread, pyqtSignal, QCoreApplication)
+from PyQt5.QtCore import (QFile, QTextStream, Qt, QThread, pyqtSignal, QCoreApplication, QTimer)
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 
@@ -164,7 +164,6 @@ class Frame(QFrame):
         left_label_vbox.addWidget(left_label_title, alignment=Qt.AlignTop | Qt.AlignCenter)
         left_label_vbox.addWidget(left_label_unit, alignment=Qt.AlignTop | Qt.AlignCenter)
         left_label_vbox.addWidget(self.left_label_content, alignment=Qt.AlignRight)
-        th.changeAvgBlink.connect(self.left_setText)
     
         # Right Label
         right_label = QLabel()
@@ -182,7 +181,6 @@ class Frame(QFrame):
         right_label_vbox.addWidget(right_label_title, alignment=Qt.AlignTop | Qt.AlignCenter)
         right_label_vbox.addWidget(right_label_unit, alignment=Qt.AlignTop | Qt.AlignCenter)
         right_label_vbox.addWidget(self.right_label_content, alignment=Qt.AlignRight)
-        th.changeWorkTime.connect(self.right_setText)
 
         # Top label Style
         main_top = QWidget()
@@ -190,20 +188,83 @@ class Frame(QFrame):
         main_hbox = QHBoxLayout(main_top)
         main_hbox.addWidget(left_label, alignment=Qt.AlignCenter)
         main_hbox.addWidget(right_label, alignment=Qt.AlignCenter)
-                
-        textLabel = QLabel("")
-        textLabel.setStyleSheet("background-color: #404040;")
-        textLabel.setFixedSize(475,75)
 
+        # Bottom Style
+        main_bottom = QHBoxLayout()
+        self.blinkImg = QLabel()
+        self.blinkImg.setPixmap(QPixmap('img/eye_off.png'))
+        th.checkBlink.connect(self.changeBlinkImg)
+
+        bottom_state = QVBoxLayout()
+        self.state_title = QLabel("state title")
+        self.state_content = QLabel("state content")
+        bottom_state.addWidget(self.state_title)        
+        bottom_state.addWidget(self.state_content)
+        bottom_state.addSpacing(10)
+        bottom_state.setAlignment(Qt.AlignLeft)
+
+        main_bottom.addWidget(self.blinkImg, alignment=Qt.AlignCenter)
+        main_bottom.addLayout(bottom_state)
+        # main_bottom.setAlignment(Qt.AlignCenter)
+
+        th.changeData.connect(self.updateState)
+
+        # Main Layout
         vbox = QVBoxLayout(self)
         vbox.addWidget(self.m_titleBar)
         vbox.addLayout(hbox)
         vbox.addWidget(main_top)
-        vbox.addWidget(textLabel, alignment=Qt.AlignCenter)
+        vbox.addLayout(main_bottom)        
+        vbox.setContentsMargins(0, 0, 0, 0) 
+
+    def updateState(self, blink, work):
+        blink = round(blink, 1)
+        self.left_label_content.setText(str(blink))
+
+        work_min = int(work/60)
+        self.right_label_content.setText(str(work_min))
+
+        if ( blink > 20 and work_min < 59 ):
+            # State Good
+            self.state_title.setText("Good")
+            self.state_title.setStyleSheet("font-size: 30px; font-weight: bold; color: #00FA9A;")          
+            self.state_content.setText("good state")
+            self.state_content.setStyleSheet("font-size: 18px; font-weight: bold;")
+
+        elif ( str(blink) == "0.0" and str(work_min) == "0" ):
+            # State Wait 
+            self.state_title.setText("Wating")
+            self.state_title.setStyleSheet("font-size: 30px; font-weight: bold;")   
+            self.state_content.setText("Please Wait")
+            self.state_content.setStyleSheet("font-size: 18px; font-weight: bold;")
+
+        elif ( blink > 20 and work_min >= 59 ):
+            # State bad ( for work time )
+            self.state_title.setText("Bad")
+            self.state_title.setStyleSheet("font-size: 30px; font-weight: bold; color: #FFA500;")     
+            self.state_content.setText("Stand up")
+            self.state_content.setStyleSheet("font-size: 18px; font-weight: bold;")
+
+        elif ( blink <= 20 and work_min < 59 ):
+            # State bad ( for blink )
+            self.state_title.setText("Bad")
+            self.state_title.setStyleSheet("font-size: 30px; font-weight: bold; color: #FFA500;")    
+            self.state_content.setText("Close your Eye")
+            self.state_content.setStyleSheet("font-size: 18px; font-weight: bold;")
         
-        # vbox.addLayout(hbox)
-        # vbox.addLayout(vbox_2)
-        vbox.setContentsMargins(0, 0, 0, 0)       
+        elif ( blink <= 20 and work_min >= 59 ):
+            # State Warning 
+            self.state_title.setText("Warning")
+            self.state_title.setStyleSheet("font-size: 30px; font-weight: bold; color: #FF4500;")   
+            self.state_content.setText("Get out here")  
+            self.state_content.setStyleSheet("font-size: 18px; font-weight: bold;")      
+
+    def changeBlinkImg(self):
+        self.blinkImg.setPixmap(QPixmap('img/eye_on.png'))
+        QTimer.singleShot(200, self.eyeOff)       
+
+    def eyeOff(self):
+        self.blinkImg.setPixmap(QPixmap('img/eye_off.png'))
 
     def buildPopup(self):
         self.cameraLabel = QLabel(self)
@@ -281,14 +342,6 @@ class Frame(QFrame):
         self.tmpThreshold = args['threshold']
         self.popup.hide()
 
-    def left_setText(self, float_text):
-        float_text = round(float_text, 1)
-        self.left_label_content.setText(str(float_text))
-
-    def right_setText(self, float_text):
-        floatToInt = int(float_text/60)
-        self.right_label_content.setText(str(floatToInt))
-
     def setImage(self, image):
         self.cameraLabel.setPixmap(QPixmap.fromImage(image))
 
@@ -317,7 +370,9 @@ class CameraPopup(QDialog):
             self.hide()
 
 class CameraThread(QThread):
+    checkBlink = pyqtSignal()
     changePixmap = pyqtSignal(QImage)
+    changeData = pyqtSignal(float, float)
     changeAvgBlink = pyqtSignal(float)
     changeWorkTime = pyqtSignal(float)
 
@@ -357,7 +412,7 @@ class CameraThread(QThread):
         EYE_AR_CONSEC_FRAMES = args['frames']
 
         BLINK_ALERT_THRESH = 3  # if LATE_BLINK_CNT is over than this value, system will alert to user.
-        WORK_ALERT_THRESH = 120  # if WORKING_TIME is over than this value, system will alert to user.
+        WORK_ALERT_THRESH = 3600  # if WORKING_TIME is over than this value, system will alert to user.
         BLINK_GAP_THRESH = 3.0  # if blink-to-blink gap is over than this value, LATE_BLINK_CNT++.
         EMPTY_NOTICE_THRESH = 5 # if user's empty time is over than this value, system will notice.
         LATE_BLINK_CNT = 0
@@ -489,6 +544,7 @@ class CameraThread(QThread):
                         TOTAL += 1
                         if WORKING_TIME >= 60:
                             AVG_BLINK_CNT = TOTAL * 60 / WORKING_TIME
+                        self.checkBlink.emit()    
                         print("Blink Gap: ", NOW_TIME - BEFORE_TIME, " / totalWorkTime: ", WORKING_TIME, " / EAR: ", BLINK_EAR,
                             " / lateBlinkCount: ", LATE_BLINK_CNT, " / Blink per Minute: ", AVG_BLINK_CNT)
                         BEFORE_TIME = NOW_TIME
@@ -514,9 +570,12 @@ class CameraThread(QThread):
                     self.alert_work_time()
                     WORKING_TIME = 0
                     TOTAL = 0
+                    AVG_BLINK_CNT = 0
 
-                self.changeAvgBlink.emit(AVG_BLINK_CNT)
-                self.changeWorkTime.emit(WORKING_TIME)
+                self.changeData.emit(AVG_BLINK_CNT, WORKING_TIME)
+
+                # self.changeAvgBlink.emit(AVG_BLINK_CNT)
+                # self.changeWorkTime.emit(WORKING_TIME)
 
             rgbImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             convertToQtFormat = QImage(rgbImage.data, rgbImage.shape[1], rgbImage.shape[0], QImage.Format_RGB888)
