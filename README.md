@@ -1,9 +1,14 @@
-# twinkle
-## ToDoList
-- PyQt 레이아웃 안에서 OPENCV 함수들 작동하게 하기
-- 백그라운드 작업 확인
-- 백그라운드 알림 확인
-- UI 짜기
+# Twinkle
+Desktop Program based on PyQt5 Checking degree of blinking of eyes and working time
 
-- 탐지 확률 손보기
-  
+## Test Environment
+- Window 10
+- python3
+- PyQt5
+- OpenCV
+
+## How to run
+`Python3 pyqt.py`
+
+## Document
+[Twinkle.pdf](./doc/Twinkle.pdf) (Korean)
